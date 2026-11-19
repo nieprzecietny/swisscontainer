@@ -1,0 +1,9 @@
+# Prywatne notatki, profile firewalla i konfiguracja użytkownika — nigdy w publicznym repo
+docs/local/
+
+# Sekrety i lokalne nadpisania
+.env
+.env.*
+!.env.example
+.vault_pass*
+*.vault_pass

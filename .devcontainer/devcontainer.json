@@ -1,0 +1,37 @@
+// Uniwersalny devcontainer — plan: docs/plan-devcontainer.md
+// Etap 1: szkielet. Kolejne etapy dodają toolchainy, usługi (supervisord), serwery WWW i firewall.
+{
+  "name": "devc-universal",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+  "remoteUser": "vscode",
+  "init": true,
+
+  // Wolumeny logowań wspólne dla wszystkich projektów (jedno logowanie);
+  // historia powłoki per projekt.
+  "mounts": [
+    "source=devc-claude,target=/home/vscode/.claude,type=volume",
+    "source=devc-codex,target=/home/vscode/.codex,type=volume",
+    "source=devc-gemini,target=/home/vscode/.gemini,type=volume",
+    "source=devc-gh,target=/home/vscode/.config/gh,type=volume",
+    "source=devc-tea,target=/home/vscode/.config/tea,type=volume",
+    "source=devc-history-${devcontainerId},target=/commandhistory,type=volume"
+  ],
+
+  "containerEnv": {
+    "TZ": "Europe/Warsaw"
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "anthropic.claude-code"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "zsh"
+      }
+    }
+  }
+}
