@@ -37,3 +37,7 @@ Przełączanie Node: `fnm use 22`, automatycznie z `.nvmrc` / `.node-version`; d
 host/               narzędzia uruchamiane na hoście (izolowany Ansible Vault)
 docs/               plan i decyzje
 ```
+
+## Licencja
+
+[Apache License 2.0](LICENSE).
