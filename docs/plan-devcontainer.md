@@ -74,8 +74,8 @@ konta) **nie trafia do repo ani do obrazu** — patrz 4.3 i 4.4.
 | Node narzędziowy | 24.x | archiwum nodejs.org + SHA-256 → `/opt/devc-node` | poza PATH; tylko dla wrapperów agentów |
 | .NET SDK | 8.0, 10.0, 11.0 + Aspire CLI | `dotnet-install.sh` / feature `dotnet:2` | runtime'y 8/10/11 z SDK; .NET 8 bez wsparcia od 10.11.2026 |
 | PHP | 8.5 (CLI + FPM) | PPA `ondrej/php` | mbstring, xml, curl, intl, zip, opcache, apcu, `pdo_mysql`, `sqlsrv`/`pdo_sqlsrv` 5.13.x; Xdebug wyłączony domyślnie |
-| Composer, Symfony CLI | aktualne | getcomposer.org / repo Symfony | |
-| Python, Ansible | 3.12; ansible-core 2.22.x | apt + `pipx` | bez hasła vaulta |
+| Composer, Symfony CLI | 2.11.x; 5.22.x | instalator Composera (`installer.sig`) / wydanie GitHub + SHA-256 | |
+| Python, Ansible | 3.12 (system) + 3.13; ansible-core 2.22.x | apt + `pipx` na Pythonie 3.13 (deadsnakes) | ansible-core 2.22 wymaga Pythona ≥ 3.13; bez hasła vaulta |
 | Klienci baz | `mssql-tools18` + `msodbcsql18`, `mariadb-client` | repo Microsoft / MariaDB | `sqlcmd -C` |
 | git, gh, tea, gitea-mcp | | apt / binarki | host i tokeny — w wolumenach, nie w obrazie |
 | Serwery WWW | Apache, nginx, Traefik | apt / binarka | jako `vscode`, bez roota (4.6) |
@@ -104,13 +104,15 @@ Połączenia: `Server=localhost,1433;...;TrustServerCertificate=True`, `mysql://
   devcontainer.json          # build, runArgs, mounts, containerEnv, forwardPorts
   Dockerfile
   build/make-cli-wrappers.js # wrappery agentów AI → zawsze Node z /opt/devc-node           [zrobione]
+  build/add-apt-repo.sh      # repozytoria apt z jawnym keyringiem i przypiętymi odciskami   [zrobione]
   rootfs/                    # kopiowane do obrazu, własność root (D36)
-    usr/local/sbin/container-init.sh   # sudo, bez argumentów: firewall → init usług → supervisord
-    usr/local/sbin/devc-svc            # sudo: status / restart <usługa>
+    usr/local/sbin/container-init.sh   # sudo, bez argumentów: firewall → init usług → supervisord  [zrobione]
+    usr/local/sbin/devc-svc            # sudo: status / restart <usługa> / logs <usługa>   [zrobione]
+    usr/local/lib/devc/services.sh     # wspólna logika usług (init, konta dev, gotowość)   [zrobione]
     usr/local/bin/dev-services         # bez sudo: serwery WWW projektu
     etc/devc/firewall/profiles/*.txt   # publiczne profile firewalla
     etc/devc/supervisor/, etc/devc/{apache,nginx,php,pma}/
-  scripts/post-create.sh, scripts/verify.sh
+  scripts/verify.sh          # testy akceptacyjne (w obrazie jako devc-verify)             [etapy 1–3]
 host/                        # uruchamiane NA HOŚCIE (Windows)
   ansible-vault/Dockerfile   # izolowany vault                                              [zrobione]
   vault.ps1                  # wrapper → kopia do %USERPROFILE%\bin                          [zrobione]
@@ -122,14 +124,14 @@ docs/local/                  # PRYWATNE notatki i profile użytkownika — w .gi
 ### 4.2 Uruchamianie
 
 ```
-docker run (VS Code) ── runArgs: --cap-add NET_ADMIN --cap-add NET_RAW; init: true
+docker run (VS Code) ── containerUser: root (PID 1), remoteUser: vscode; init: true;
+                        runArgs: --label swisscontainer=1 --hostname devc (+ --cap-add NET_ADMIN/NET_RAW w etapie 5)
   ├─ postStartCommand: sudo /usr/local/sbin/container-init.sh   (waitFor: postStartCommand)
   │    1. firewall (profile → dnsmasq + ipset + iptables)
-  │    2. DEV_SERVICES, DEVC_FIREWALL_* ← /proc/1/environ (ustawione przy tworzeniu kontenera)
+  │    2. DEV_SERVICES, DEVC_* ← /proc/1/environ (ustawione przy tworzeniu kontenera; PID 1 musi być rootem — fail-closed)
   │    3. pierwszy start pustych wolumenów: inicjalizacja danych, losowe hasła superużytkowników, konta `dev`
   │    4. supervisord (root, socket 0700) → usługi pod własnymi użytkownikami
   │    5. czekanie na gotowość
-  └─ postCreateCommand (jako vscode): scripts/post-create.sh
 ```
 
 ### 4.3 Firewall — mechanizm w obrazie, listy jako profile
@@ -241,13 +243,14 @@ inotify działa przy kodzie w wolumenie Dockera (D6); na bind mouncie z Windows 
 1. **Szkielet** — ✅ zrobione: Ubuntu 24.04, `vscode` bez sudo, fnm + Node 22/24/26, Node narzędziowy + wrappery,
    Claude Code / Codex / Gemini CLI (przypięte), nano/micro/vim/mc, wolumeny logowań. Przetestowane obrazem
    i `@devcontainers/cli up`.
-2. **Toolchainy** — .NET 8/10/11 + Aspire, PHP 8.5 + Composer + Symfony CLI, Python + ansible-core, git/gh/tea/gitea-mcp,
-   klienci baz.
-3. **Usługi w środku** — supervisord, `container-init.sh`, `devc-svc`; SQL Server 2025, MariaDB 12.3, phpMyAdmin,
-   RabbitMQ 4.3, Mailpit; `DEV_SERVICES`; konta `dev`.
+2. **Toolchainy** — ✅ zrobione: .NET 8/10/11 + Aspire, PHP 8.5 + Composer + Symfony CLI, Python + ansible-core,
+   git/gh/tea/gitea-mcp, klienci baz. Wersje przypięte w `ARG`, sumy SHA weryfikowane, repozytoria apt z keyringami.
+3. **Usługi w środku** — ✅ zrobione: supervisord, `container-init.sh`, `devc-svc`; SQL Server 2025, MariaDB 12.3,
+   phpMyAdmin, RabbitMQ 4.3, Mailpit; `DEV_SERVICES`; konta `dev`. Usługi słuchają tylko na 127.0.0.1.
+   Uprawnienia MariaDB odtwarzane przy każdym starcie serwera (`--init-file`) — `dev` nie podniesie sobie uprawnień.
 4. **Serwowanie per stos** — Apache + PHP-FPM, nginx, Traefik, Vite, `dotnet watch`, Aspire; `dev-services`.
 5. **Firewall** — profile (obraz + wolumen), dnsmasq + ipset + iptables, tryby `log` → `enforce`, `host/devc-firewall.ps1`.
-6. **`verify.sh`** — m.in.: wersje SDK/runtime'ów; `sudo -n true` → odmowa; brak `docker.sock`; brak hasła vaulta;
+6. **`verify.sh`** — 🟡 sekcje etapów 1–3 gotowe; m.in.: wersje SDK/runtime'ów; `sudo -n true` → odmowa; brak `docker.sock`; brak hasła vaulta;
    `sqlcmd`/`mariadb` jako `dev`; usługi pod własnymi użytkownikami (`kill` z `vscode` → odmowa); serwery WWW nie jako
    root; hot reload per stos; `example.com` zablokowane, profile przepuszczają swoje cele; bez profili — tylko `vscode`.
 
@@ -287,6 +290,10 @@ Własny runner: efemeryczny (świeży kontener/VM na job) i osobny dla jobów z 
 - `devcontainers/base:ubuntu-24.04` ma `/etc/sudoers.d/vscode` z `NOPASSWD:ALL` — usuwane w Dockerfile.
 - `@anthropic-ai/claude-code` 2.x instaluje natywną binarkę.
 - Microsoft Drivers for PHP for SQL Server 5.13.x wspierają PHP 8.5.
+- ansible-core 2.22 wymaga Pythona ≥ 3.13 (Ubuntu 24.04: 3.12).
+- SQL Server: hasło loginu nie może zawierać jego nazwy (`dev` + hasło z „dev” → odrzucone przez politykę).
+- ODBC Driver 18 (sqlcmd) nie łączy się z `localhost`, gdy SQL Server słucha tylko na 127.0.0.1 → `-S 127.0.0.1`.
+- `rabbitmqctl add_user` bez TTY nie czyta hasła ze stdin (zawiesza się).
 
 ## 9. Źródła
 

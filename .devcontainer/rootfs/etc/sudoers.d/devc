@@ -1,0 +1,4 @@
+# swisscontainer (D17): vscode NIE ma ogólnego sudo. Wyjątki — dokładnie dwa polecenia:
+#   container-init.sh tylko BEZ argumentów (""), devc-svc waliduje argumenty sam.
+Defaults:vscode env_reset, !env_keep, secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+vscode ALL=(root) NOPASSWD: /usr/local/sbin/container-init.sh "", /usr/local/sbin/devc-svc

@@ -1,0 +1,15 @@
+# devcontainer: MariaDB tylko na localhost; root wyłącznie przez gniazdo (unix_socket)
+[mariadbd]
+user                    = mysql
+datadir                 = /var/lib/mysql
+socket                  = /run/mysqld/mysqld.sock
+pid-file                = /run/mysqld/mysqld.pid
+bind-address            = 127.0.0.1
+port                    = 3306
+skip-name-resolve
+secure-file-priv        = /var/lib/mysql-files
+local-infile            = 0
+innodb_buffer_pool_size = 256M
+
+[client]
+socket                  = /run/mysqld/mysqld.sock

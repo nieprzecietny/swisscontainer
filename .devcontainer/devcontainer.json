@@ -1,36 +1,84 @@
 // Uniwersalny devcontainer — plan: docs/plan-devcontainer.md
-// Etap 1: szkielet. Kolejne etapy dodają toolchainy, usługi (supervisord), serwery WWW i firewall.
+// Etapy: 1 szkielet · 2 toolchainy · 3 usługi (supervisord) · 4 serwowanie per stos · 5 firewall · 6 verify.sh
 {
   "name": "devc-universal",
   "build": {
     "dockerfile": "Dockerfile",
     "context": "."
   },
+  // Kontener (PID 1) jako root, narzędzia/terminale/agenci jako vscode. container-init.sh ufa tylko środowisku
+  // roota z /proc/1/environ — PID 1 należący do vscode mógłby zostać przez niego podejrzany/zmieniony.
+  "containerUser": "root",
   "remoteUser": "vscode",
   "init": true,
 
-  // Wolumeny logowań wspólne dla wszystkich projektów (jedno logowanie);
-  // historia powłoki per projekt.
+  // Etykieta = „kontener tego projektu” (sprzątanie: docker rm -f $(docker ps -aq --filter label=swisscontainer=1)).
+  // Stała nazwa hosta: SQL Server (@@SERVERNAME) i RabbitMQ nie zależą od losowego ID kontenera.
+  "runArgs": [
+    "--label=swisscontainer=1",
+    "--hostname=devc"
+  ],
+
+  // Wolumeny logowań wspólne dla wszystkich projektów (jedno logowanie); historia i dane usług — per projekt.
   "mounts": [
     "source=devc-claude,target=/home/vscode/.claude,type=volume",
     "source=devc-codex,target=/home/vscode/.codex,type=volume",
     "source=devc-gemini,target=/home/vscode/.gemini,type=volume",
     "source=devc-gh,target=/home/vscode/.config/gh,type=volume",
     "source=devc-tea,target=/home/vscode/.config/tea,type=volume",
-    "source=devc-history-${devcontainerId},target=/commandhistory,type=volume"
+    "source=devc-history-${devcontainerId},target=/commandhistory,type=volume",
+    "source=devc-mssql-${devcontainerId},target=/var/opt/mssql,type=volume",
+    "source=devc-mariadb-${devcontainerId},target=/var/lib/mysql,type=volume",
+    "source=devc-rabbitmq-${devcontainerId},target=/var/lib/rabbitmq,type=volume",
+    "source=devc-mailpit-${devcontainerId},target=/var/lib/mailpit,type=volume"
   ],
 
   "containerEnv": {
-    "TZ": "Europe/Warsaw"
+    "TZ": "Europe/Warsaw",
+    // Usługi uruchamiane przy starcie: mssql, mariadb, phpmyadmin, rabbitmq, mailpit (lista po przecinku; "" = żadna)
+    "DEV_SERVICES": "mssql,mariadb,phpmyadmin",
+    // Hasło konta `dev` we wszystkich usługach — tylko dane deweloperskie, tylko localhost.
+    // Musi spełniać politykę SQL Servera: min. 8 znaków, 3 z 4 grup (wielkie, małe, cyfry, symbole)
+    // i NIE może zawierać nazwy loginu („dev”).
+    "DEVC_DEV_PASSWORD": "Local_Passw0rd!",
+    // Limit pamięci SQL Servera (MB, min. 2048)
+    "MSSQL_MEMORY_LIMIT_MB": "2048"
+  },
+
+  // Root: firewall (etap 5), inicjalizacja danych, supervisord. Jedyne użycie sudo (D17).
+  "postStartCommand": "sudo /usr/local/sbin/container-init.sh",
+  "waitFor": "postStartCommand",
+
+  "forwardPorts": [1433, 3306, 8080],
+  "portsAttributes": {
+    "1433": { "label": "SQL Server", "onAutoForward": "silent" },
+    "3306": { "label": "MariaDB", "onAutoForward": "silent" },
+    "8080": { "label": "phpMyAdmin", "onAutoForward": "notify" },
+    "5672": { "label": "RabbitMQ AMQP", "onAutoForward": "silent" },
+    "15672": { "label": "RabbitMQ UI", "onAutoForward": "notify" },
+    "1025": { "label": "Mailpit SMTP", "onAutoForward": "silent" },
+    "8025": { "label": "Mailpit UI", "onAutoForward": "notify" }
   },
 
   "customizations": {
     "vscode": {
       "extensions": [
-        "anthropic.claude-code"
+        "anthropic.claude-code",
+        "ms-dotnettools.csharp",
+        "ms-dotnettools.csdevkit",
+        "bmewburn.vscode-intelephense-client",
+        "xdebug.php-debug",
+        "ms-mssql.mssql",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "redhat.ansible",
+        "redhat.vscode-yaml",
+        "ms-python.python"
       ],
       "settings": {
-        "terminal.integrated.defaultProfile.linux": "zsh"
+        "terminal.integrated.defaultProfile.linux": "zsh",
+        "php.validate.executablePath": "/usr/bin/php8.5",
+        "intelephense.environment.phpVersion": "8.5.0"
       }
     }
   }
