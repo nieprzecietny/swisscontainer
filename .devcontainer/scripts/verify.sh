@@ -45,6 +45,14 @@ sec_base() {
     check_no "sudo container-init.sh z argumentem → odmowa" 'sudo -n /usr/local/sbin/container-init.sh --help'
     check_no "brak gniazda Dockera" 'test -e /var/run/docker.sock || test -e /run/docker.sock'
     check_no "brak klienta docker" 'command -v docker'
+    # VS Code potrafi przekazać do kontenera poświadczenia i konfigurację z hosta — agent mógłby je odczytać.
+    # Wyłączenie: ustawienia użytkownika VS Code na HOŚCIE (README → „Ustawienia VS Code na hoście").
+    check_no "brak helpera poświadczeń gita z hosta (git credential fill → tokeny hosta)" \
+        'git config --get-all credential.helper | grep -iE "vscode|remote-containers|git-credential-helper"'
+    check_no "brak .gitconfig skopiowanego z hosta (ścieżki Windows w safe.directory)" \
+        'git config --global --get-all safe.directory | grep -E "^[A-Za-z]:[/\\\\]"'
+    check_no "brak przekazanego agenta SSH z hosta" 'test -n "${SSH_AUTH_SOCK:-}" && test -S "${SSH_AUTH_SOCK}" && ssh-add -l'
+    check_no "brak przekazanego helpera poświadczeń Dockera" 'grep -q credsStore ~/.docker/config.json'
     check_no "brak hasła vaulta (zmienne/pliki)" 'env | grep -E "^ANSIBLE_VAULT_PASSWORD" || ls ~/.vault_pass* ~/.ansible/vault* 2>/dev/null | grep .'
     check_re "Claude Code" '[0-9]+\.[0-9]+' 'claude --version'
     check_re "Codex CLI" '[0-9]+\.[0-9]+' 'codex --version'

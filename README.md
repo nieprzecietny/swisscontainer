@@ -25,7 +25,19 @@ Inspiracja: [referencyjny devcontainer Claude Code](https://code.claude.com/docs
 1. Docker Desktop + VS Code z rozszerzeniem Dev Containers.
 2. Otwórz repozytorium i wybierz **Reopen in Container** (dla repozytoriów aplikacji zalecane
    **Clone Repository in Container Volume** — szybszy system plików i działający hot reload).
-3. Zaloguj agentów w terminalu kontenera: `claude`, `codex login --device-auth`, `gemini`.
+3. **Ustawienia VS Code na hoście (wymagane).** Domyślnie rozszerzenie Dev Containers kopiuje do kontenera
+   `.gitconfig` z hosta i przekazuje helper poświadczeń gita — agent w kontenerze mógłby wtedy pobrać tokeny
+   z hosta (`git credential fill`). W ustawieniach użytkownika VS Code (`Preferences: Open User Settings (JSON)`):
+
+   ```jsonc
+   "dev.containers.copyGitConfig": false,
+   "dev.containers.gitCredentialHelperConfigLocation": "none",
+   "dev.containers.dockerCredentialHelper": false,
+   "git.terminalAuthentication": false
+   ```
+
+   Po zmianie: **Dev Containers: Rebuild Container**. `devc-verify` sprawdza, że nic z hosta nie zostało przekazane.
+4. Zaloguj agentów w terminalu kontenera: `claude`, `codex login --device-auth`, `gemini`.
    Logowania są zapisywane w wolumenach i przetrwają przebudowę kontenera.
 
 Przełączanie Node: `fnm use 22`, automatycznie z `.nvmrc` / `.node-version`; domyślna wersja: `fnm default 26`.
