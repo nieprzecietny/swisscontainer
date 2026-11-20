@@ -14,9 +14,12 @@
 
   // Etykieta = „kontener tego projektu” (sprzątanie: docker rm -f $(docker ps -aq --filter label=swisscontainer=1)).
   // Stała nazwa hosta: SQL Server (@@SERVERNAME) i RabbitMQ nie zależą od losowego ID kontenera.
+  // NET_ADMIN/NET_RAW — wyłącznie dla firewalla (root); vscode i tak nie ma żadnych capabilities.
   "runArgs": [
     "--label=swisscontainer=1",
-    "--hostname=devc"
+    "--hostname=devc",
+    "--cap-add=NET_ADMIN",
+    "--cap-add=NET_RAW"
   ],
 
   // Wolumeny logowań wspólne dla wszystkich projektów (jedno logowanie); historia i dane usług — per projekt.
@@ -30,7 +33,9 @@
     "source=devc-mssql-${devcontainerId},target=/var/opt/mssql,type=volume",
     "source=devc-mariadb-${devcontainerId},target=/var/lib/mysql,type=volume",
     "source=devc-rabbitmq-${devcontainerId},target=/var/lib/rabbitmq,type=volume",
-    "source=devc-mailpit-${devcontainerId},target=/var/lib/mailpit,type=volume"
+    "source=devc-mailpit-${devcontainerId},target=/var/lib/mailpit,type=volume",
+    // Prywatne profile firewalla (host/devc-firewall.ps1) — TYLKO DO ODCZYTU; brak wolumenu = tylko profile publiczne
+    "source=devc-firewall,target=/etc/devc/firewall/local,type=volume,readonly"
   ],
 
   "containerEnv": {
@@ -42,7 +47,13 @@
     // i NIE może zawierać nazwy loginu („dev”).
     "DEVC_DEV_PASSWORD": "Local_Passw0rd!",
     // Limit pamięci SQL Servera (MB, min. 2048)
-    "MSSQL_MEMORY_LIMIT_MB": "2048"
+    "MSSQL_MEMORY_LIMIT_MB": "2048",
+    // Firewall: profile po przecinku. Publiczne: vscode, ai-anthropic, ai-openai, ai-google, node, dotnet, php,
+    // python, ansible, github; prywatne — z wolumenu devc-firewall. Brak/puste = tylko "vscode" (minimum).
+    // Przykład: "vscode,ai-anthropic,node,php,github,firma". Zmiana działa po przebudowie kontenera.
+    "DEVC_FIREWALL_PROFILES": "vscode",
+    // enforce (domyślnie) | log (nauka: przepuszcza i loguje zapytania DNS — sudo devc-svc logs dnsmasq) | off
+    "DEVC_FIREWALL_MODE": "enforce"
   },
 
   // Root: firewall (etap 5), inicjalizacja danych, supervisord. Jedyne użycie sudo (D17).

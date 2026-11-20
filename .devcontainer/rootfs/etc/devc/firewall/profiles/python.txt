@@ -1,0 +1,4 @@
+# Profil firewalla „python" (publiczny, w obrazie). Domena = domena + wszystkie subdomeny; IP/CIDR wprost.
+# PyPI (pip / pipx).
+pypi.org
+pythonhosted.org

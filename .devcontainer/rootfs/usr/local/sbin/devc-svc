@@ -56,6 +56,8 @@ case "${cmd}" in
         [[ "${lines}" =~ ^[0-9]{1,4}$ ]] && [ "${lines}" -ge 1 ] && [ "${lines}" -le 5000 ] || usage
         case "${name}" in
             supervisord|init) file="${DEVC_LOG}/${name}.log" ;;
+            dnsmasq) file=/var/log/devc-dnsmasq/dnsmasq.log ;;   # zapytania DNS (tylko DEVC_FIREWALL_MODE=log)
+            firewall) devc_load_env >/dev/null; iptables -S; echo; ipset list devc-allow | head -n "${lines}"; exit 0 ;;
             *-init) base="${name%-init}"; devc_is_known "${base}" || usage; file="${DEVC_LOG}/${name}.log" ;;
             *) valid_service "${name}" || { echo "devc-svc: nieznana lub wyłączona usługa: ${name}" >&2; exit 2; }
                file="${DEVC_LOG}/${name}.log" ;;

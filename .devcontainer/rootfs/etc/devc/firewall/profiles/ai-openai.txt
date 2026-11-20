@@ -1,0 +1,4 @@
+# Profil firewalla „ai-openai" (publiczny, w obrazie). Domena = domena + wszystkie subdomeny; IP/CIDR wprost.
+# Codex CLI: API i logowanie (konto ChatGPT).
+openai.com
+chatgpt.com

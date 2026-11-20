@@ -359,6 +359,16 @@ RUN set -eux; \
     rm -f /tmp/make-cli-wrappers.js; npm cache clean --force; rm -rf /root/.npm; \
     browser-sync --version
 
+# =================================================================================================
+# Etap 5 — firewall (D15, D37): dnsmasq (jedyny resolver, ipset) + ipset + iptables; profile w rootfs/
+# =================================================================================================
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends dnsmasq-base ipset iptables bind9-dnsutils; \
+    rm -rf /var/lib/apt/lists/*; \
+    getent passwd dnsmasq >/dev/null || useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin dnsmasq; \
+    dnsmasq --version | head -1; ipset --version || true; iptables --version
+
 # --- Katalogi pod wolumeny (logowania i historia przetrwają rebuild) ----------------------------
 # Pusty nazwany wolumen przejmuje przy pierwszym montowaniu właściciela katalogu z obrazu.
 RUN set -eux; \

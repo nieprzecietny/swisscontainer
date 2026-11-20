@@ -1,0 +1,8 @@
+# Profil firewalla „node" (publiczny, w obrazie). Domena = domena + wszystkie subdomeny; IP/CIDR wprost.
+# npm / yarn + pobieranie wersji Node (fnm).
+registry.npmjs.org
+npmjs.org
+npmjs.com
+registry.yarnpkg.com
+yarnpkg.com
+nodejs.org

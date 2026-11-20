@@ -1,0 +1,12 @@
+# Profil firewalla „vscode" (publiczny, w obrazie). Domena = domena + wszystkie subdomeny; IP/CIDR wprost.
+# Minimum: serwer VS Code, Marketplace i rozszerzenia (domyślny, gdy DEVC_FIREWALL_PROFILES puste).
+update.code.visualstudio.com
+code.visualstudio.com
+vscode.download.prss.microsoft.com
+marketplace.visualstudio.com
+vsassets.io
+vscode-cdn.net
+vscode-unpkg.net
+vscode.blob.core.windows.net
+vscodeexperiments.azureedge.net
+default.exp-tas.com

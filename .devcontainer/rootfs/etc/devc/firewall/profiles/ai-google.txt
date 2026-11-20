@@ -1,0 +1,4 @@
+# Profil firewalla „ai-google" (publiczny, w obrazie). Domena = domena + wszystkie subdomeny; IP/CIDR wprost.
+# Gemini CLI: API i logowanie Google. UWAGA: wspólne adresy z innymi usługami Google (plan 4.3).
+googleapis.com
+accounts.google.com

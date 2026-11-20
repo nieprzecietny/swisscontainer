@@ -1,0 +1,6 @@
+# Profil firewalla „github" (publiczny, w obrazie). Domena = domena + wszystkie subdomeny; IP/CIDR wprost.
+# GitHub: git, API, pobieranie wydań. Zakresy IPv4 z https://api.github.com/meta dokładane przy starcie.
+github.com
+githubusercontent.com
+ghcr.io
+githubassets.com

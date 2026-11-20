@@ -1,0 +1,5 @@
+# Profil firewalla „ai-anthropic" (publiczny, w obrazie). Domena = domena + wszystkie subdomeny; IP/CIDR wprost.
+# Claude Code: API, logowanie, telemetria Anthropic.
+anthropic.com
+claude.ai
+claude.com

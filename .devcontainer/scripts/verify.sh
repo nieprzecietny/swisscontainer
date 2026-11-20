@@ -257,7 +257,34 @@ sec_web() {
         skip "dotnet watch" "VERIFY_SLOW=0"
     fi
 }
-sec_firewall() { section "Etap 5 — firewall"; skip "etap 5" "jeszcze nie zaimplementowany"; }
+sec_firewall() {
+    local profiles="${DEVC_FIREWALL_PROFILES:-vscode}" mode="${DEVC_FIREWALL_MODE:-enforce}"
+    section "Etap 5 — firewall (tryb ${mode}, profile: ${profiles})"
+    on() { [[ ",${profiles// /}," == *",$1,"* ]]; }
+    local R='curl -sS -o /dev/null --max-time 8'   # (bez funkcji — check uruchamia osobne bash -c)
+    check_no "agent nie zmieni reguł (iptables -F jako vscode)" 'iptables -F'
+    check_no "agent nie zmieni zbioru (ipset flush jako vscode)" 'ipset flush devc-allow'
+    if [ "${mode}" = off ]; then skip "testy firewalla" "DEVC_FIREWALL_MODE=off"; return; fi
+    check_re "jedyny resolver = dnsmasq (127.0.0.1)" '^nameserver 127\.0\.0\.1$' 'grep ^nameserver /etc/resolv.conf'
+    check_no "vscode nie zmieni resolv.conf" 'echo "nameserver 8.8.8.8" >> /etc/resolv.conf'
+    check_re "usługi na localhost działają mimo firewalla" 'ok' '(exec 3<>/dev/tcp/127.0.0.1/22) 2>/dev/null; echo ok'
+    check "profil vscode: Marketplace dostępny" "$R https://marketplace.visualstudio.com/"
+    check "profil vscode: serwer VS Code (update.code.visualstudio.com)" "$R https://update.code.visualstudio.com/"
+    if [ "${mode}" = log ]; then skip "blokady" "tryb log — ruch przepuszczany"; return; fi
+    check_no "example.com zablokowane" "$R https://example.com/"
+    check_no "example.com: brak rozwiązania DNS (zapytania spoza profili nie wychodzą)" 'dig +time=3 +tries=1 +short example.com | grep -E "^[0-9]"'
+    check_no "dig @8.8.8.8 zablokowane (DNS tylko przez dnsmasq)" 'dig +time=3 +tries=1 @8.8.8.8 example.com | grep -q "ANSWER SECTION"'
+    check_no "DNS-over-TCP do 1.1.1.1 zablokowane" 'dig +tcp +time=3 +tries=1 @1.1.1.1 example.com | grep -q "ANSWER SECTION"'
+    check_no "IPv6 zablokowane" 'curl -6 -sS -o /dev/null --max-time 5 https://example.com/'
+    check_no "HTTPS po IP spoza listy (1.1.1.1) zablokowane" 'curl -sS -o /dev/null --max-time 5 -k https://1.1.1.1/'
+    local p host
+    for p in ai-anthropic:api.anthropic.com ai-openai:api.openai.com ai-google:generativelanguage.googleapis.com \
+             node:registry.npmjs.org dotnet:api.nuget.org php:repo.packagist.org python:pypi.org github:api.github.com test:example.net; do
+        host="${p#*:}"; p="${p%%:*}"
+        if on "$p"; then check "profil ${p}: ${host} dostępny" "$R https://${host}/"
+        else check_no "bez profilu ${p}: ${host} zablokowane" "$R https://${host}/"; fi
+    done
+}
 
 # ==================================================================================================
 sections=("$@"); [ ${#sections[@]} -gt 0 ] || sections=(base tools services web firewall)

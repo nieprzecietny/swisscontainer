@@ -30,8 +30,8 @@ devc_require_root_pid1
 TZ="$(devc_env1 TZ || echo UTC)"; [[ "${TZ}" =~ ^[A-Za-z0-9_/+-]+$ ]] || TZ=UTC; export TZ
 
 # --- 1. firewall (etap 5) --------------------------------------------------------------------------
-if [ -x /usr/local/lib/devc/firewall.sh ]; then
-    /usr/local/lib/devc/firewall.sh || die "firewall: konfiguracja nie powiodła się — usługi nie zostaną uruchomione"
+if [ -f /usr/local/lib/devc/firewall.sh ]; then
+    bash /usr/local/lib/devc/firewall.sh || die "firewall: konfiguracja nie powiodła się — usługi nie zostaną uruchomione"
 fi
 
 # --- 2. konfiguracja z /proc/1/environ ---------------------------------------------------------------

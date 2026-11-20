@@ -110,14 +110,15 @@ Połączenia: `Server=localhost,1433;...;TrustServerCertificate=True`, `mysql://
     usr/local/sbin/devc-svc            # sudo: status / restart <usługa> / logs <usługa>   [zrobione]
     usr/local/lib/devc/services.sh     # wspólna logika usług (init, konta dev, gotowość)   [zrobione]
     usr/local/bin/dev-services         # bez sudo: serwery WWW projektu                    [zrobione]
-    etc/devc/firewall/profiles/*.txt   # publiczne profile firewalla
+    etc/devc/firewall/profiles/*.txt   # publiczne profile firewalla                      [zrobione]
+    usr/local/lib/devc/firewall.sh     # dnsmasq + ipset + iptables z profili              [zrobione]
     etc/devc/supervisor/, etc/devc/{apache,nginx,php,pma}/
-  scripts/verify.sh          # testy akceptacyjne (w obrazie jako devc-verify)             [etapy 1–4]
+  scripts/verify.sh          # testy akceptacyjne (w obrazie jako devc-verify)             [etapy 1–5]
   tests/fixtures/            # PHP + .htaccess, statyczny dist/ (SPA) — dla verify.sh       [zrobione]
 host/                        # uruchamiane NA HOŚCIE (Windows)
   ansible-vault/Dockerfile   # izolowany vault                                              [zrobione]
   vault.ps1                  # wrapper → kopia do %USERPROFILE%\bin                          [zrobione]
-  devc-firewall.ps1          # zarządzanie prywatnymi profilami w wolumenie devc-firewall
+  devc-firewall.ps1          # zarządzanie prywatnymi profilami w wolumenie devc-firewall   [zrobione]
 docs/plan-devcontainer.md    # ten plan
 docs/local/                  # PRYWATNE notatki i profile użytkownika — w .gitignore
 ```
@@ -126,7 +127,7 @@ docs/local/                  # PRYWATNE notatki i profile użytkownika — w .gi
 
 ```
 docker run (VS Code) ── containerUser: root (PID 1), remoteUser: vscode; init: true;
-                        runArgs: --label swisscontainer=1 --hostname devc (+ --cap-add NET_ADMIN/NET_RAW w etapie 5)
+                        runArgs: --label swisscontainer=1 --hostname devc --cap-add NET_ADMIN --cap-add NET_RAW
   ├─ postStartCommand: sudo /usr/local/sbin/container-init.sh   (waitFor: postStartCommand)
   │    1. firewall (profile → dnsmasq + ipset + iptables)
   │    2. DEV_SERVICES, DEVC_* ← /proc/1/environ (ustawione przy tworzeniu kontenera; PID 1 musi być rootem — fail-closed)
@@ -163,12 +164,14 @@ i wymaga wpisania wszystkich domen do obrazu. Tutaj:
 - Pozycje są walidowane (domena / IPv4 / CIDR); błędne linie odrzucane z ostrzeżeniem.
 
 **Egzekwowanie:**
-1. **dnsmasq jako jedyny resolver** (`127.0.0.1`, upstream = Docker DNS `127.0.0.11`); `ipset=/<domeny z profili>/allowed`
-   — każda rozwiązana (sub)domena trafia od razu do ipsetu (działają wildcardy i CDN-y).
-2. **ipset `allowed`**: z dnsmasq + IP/CIDR z profili + zakresy GitHuba z `api.github.com/meta` (profil `github`).
+1. **dnsmasq jako jedyny resolver** (`127.0.0.1`, upstream = serwery DNS kontenera z `/etc/resolv.conf` — na domyślnym
+   bridge'u to DNS Docker Desktop, nie `127.0.0.11`); `ipset=/<domeny z profili>/devc-allow` — każda rozwiązana
+   (sub)domena trafia od razu do ipsetu (działają wildcardy i CDN-y). W trybie `enforce` dnsmasq przekazuje dalej
+   **tylko** zapytania o domeny z profili — pozostałe nie opuszczają kontenera (brak kanału DNS na zewnątrz).
+2. **ipset `devc-allow`**: z dnsmasq + IP/CIDR z profili + zakresy GitHuba z `api.github.com/meta` (profil `github`).
 3. **iptables** (domyślnie DROP): loopback (usługi) i ESTABLISHED/RELATED — dozwolone; TCP 80/443/22 tylko do `allowed`;
-   DNS tylko do dnsmasq (blokuje tunelowanie DNS); **bez** reguły „cała sieć hosta /24" (odcina inne kontenery na
-   bridge'u); IPv6 DROP; reszta LOG + REJECT.
+   DNS tylko przez dnsmasq (tylko on — `--uid-owner dnsmasq` — rozmawia z upstreamem); **bez** reguły „cała sieć hosta /24"
+   (odcina inne kontenery na bridge'u); INPUT: tylko lo i ESTABLISHED; IPv6 DROP; reszta LOG `DEVC-FW:` + REJECT.
 4. Usługi działają w tej samej przestrzeni sieciowej → firewall obejmuje je automatycznie.
 5. Weryfikacja na końcu: `example.com` zablokowane; po jednym celu z każdego włączonego profilu — osiągalny.
 
@@ -252,8 +255,10 @@ inotify działa przy kodzie w wolumenie Dockera (D6); na bind mouncie z Windows 
 4. **Serwowanie per stos** — ✅ zrobione: `dev-services start|stop|reload|restart|status|logs` (jako `vscode`):
    Apache 8000 (`.htaccess`, mod_rewrite, PHP-FPM przez gniazdo, hot reload PHP), nginx 8081 (`dist/`, SPA fallback),
    Traefik 8088 (file provider), browser-sync; `dotnet watch` przetestowany. Fixture'y: `.devcontainer/tests/fixtures/`.
-5. **Firewall** — profile (obraz + wolumen), dnsmasq + ipset + iptables, tryby `log` → `enforce`, `host/devc-firewall.ps1`.
-6. **`verify.sh`** — 🟡 sekcje etapów 1–4 gotowe; m.in.: wersje SDK/runtime'ów; `sudo -n true` → odmowa; brak `docker.sock`; brak hasła vaulta;
+5. **Firewall** — ✅ zrobione: profile (obraz + wolumen ro, pliki tylko dla roota), dnsmasq + ipset + iptables,
+   tryby `enforce` / `log` / `off`, `host/devc-firewall.ps1`. dnsmasq przekazuje dalej tylko zapytania o domeny
+   z profili (bez tunelowania DNS); INPUT tylko lo + ESTABLISHED (inne kontenery nie dosięgną usług).
+6. **`verify.sh`** — ✅ sekcje etapów 1–5; m.in.: wersje SDK/runtime'ów; `sudo -n true` → odmowa; brak `docker.sock`; brak hasła vaulta;
    `sqlcmd`/`mariadb` jako `dev`; usługi pod własnymi użytkownikami (`kill` z `vscode` → odmowa); serwery WWW nie jako
    root; hot reload per stos; `example.com` zablokowane, profile przepuszczają swoje cele; bez profili — tylko `vscode`.
 
@@ -297,6 +302,8 @@ Własny runner: efemeryczny (świeży kontener/VM na job) i osobny dla jobów z 
 - SQL Server: hasło loginu nie może zawierać jego nazwy (`dev` + hasło z „dev” → odrzucone przez politykę).
 - ODBC Driver 18 (sqlcmd) nie łączy się z `localhost`, gdy SQL Server słucha tylko na 127.0.0.1 → `-S 127.0.0.1`.
 - `rabbitmqctl add_user` bez TTY nie czyta hasła ze stdin (zawiesza się).
+- Na domyślnym bridge'u Dockera nie ma wbudowanego DNS `127.0.0.11` (jest tylko w sieciach użytkownika).
+- PowerShell 5.1 czyta `.ps1` bez BOM jako ANSI — skrypty z polskimi znakami muszą mieć UTF-8 z BOM.
 
 ## 9. Źródła
 

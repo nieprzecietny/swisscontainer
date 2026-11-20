@@ -1,0 +1,6 @@
+# Profil firewalla „php" (publiczny, w obrazie). Domena = domena + wszystkie subdomeny; IP/CIDR wprost.
+# Composer / Packagist / Symfony (dist z GitHuba — dodaj też profil github).
+packagist.org
+getcomposer.org
+symfony.com
+pecl.php.net

@@ -7,14 +7,13 @@ w izolowanym środowisku. Jeden kontener, wszystko w środku:
 - usługi: **SQL Server 2025**, **MariaDB**, phpMyAdmin, RabbitMQ, Mailpit
 - serwowanie per stos z hot reload: `dotnet watch` / Aspire / Traefik, Symfony CLI / Apache + PHP-FPM, Vite / nginx
 
-> **Status: w budowie.** Gotowe etapy 1–4 z 6 (szkielet, toolchainy, usługi w kontenerze, serwowanie per stos) + testy `verify.sh`.
-> Brakuje firewalla (etap 5).
+> **Status: w budowie.** Gotowe etapy 1–6 (szkielet, toolchainy, usługi, serwowanie per stos, firewall, testy `verify.sh`).
 > Plan i decyzje: [`docs/plan-devcontainer.md`](docs/plan-devcontainer.md).
 
 ## Bezpieczeństwo w skrócie
 
-- Użytkownik kontenera **nie ma sudo** ani dostępu do Dockera; agenci AI zainstalowani jako root (nie podmienią się).
-- **Firewall oparty o profile** (etap 5): w obrazie tylko publiczne profile, własne domeny w wolumenie tylko do odczytu;
+- Użytkownik kontenera **nie ma sudo** (poza dwoma skryptami startu i zarządzania usługami) ani dostępu do Dockera; agenci AI zainstalowani jako root (nie podmienią się).
+- **Firewall oparty o profile**: w obrazie tylko publiczne profile, własne domeny w wolumenie tylko do odczytu;
   projekt wybiera profile, a bez wyboru dostępny jest wyłącznie edytor.
 - Usługi działają pod własnymi użytkownikami, poza kontrolą agentów.
 - **Ansible Vault poza kontenerem** (`host/`): agenci nie widzą ani hasła, ani odszyfrowanej treści.
@@ -49,6 +48,24 @@ sudo devc-svc status                # stan usług
 sudo devc-svc restart mariadb       # restart jednej usługi
 sudo devc-svc logs mssql 100        # ostatnie linie logu
 devc-verify                         # testy akceptacyjne obrazu (VERIFY_INTRUSIVE=1 — także restarty)
+```
+
+### Firewall (profile)
+
+Domyślnie przepuszczany jest **tylko** ruch potrzebny VS Code (profil `vscode`). Agenci AI, rejestry pakietów
+i własne usługi — po jawnym włączeniu profilu w `devcontainer.json`:
+
+```jsonc
+"DEVC_FIREWALL_PROFILES": "vscode,ai-anthropic,node,php,github,firma",
+"DEVC_FIREWALL_MODE": "enforce"     // log = nauka (przepuszcza, loguje DNS: sudo devc-svc logs dnsmasq), off
+```
+
+Publiczne profile: `vscode`, `ai-anthropic`, `ai-openai`, `ai-google`, `node`, `dotnet`, `php`, `python`, `ansible`,
+`github` (`.devcontainer/rootfs/etc/devc/firewall/profiles/`). Własne domeny/hosty — prywatne profile w wolumenie
+`devc-firewall` (w kontenerze tylko do odczytu, czytelne tylko dla roota), zarządzane z hosta:
+
+```powershell
+host\devc-firewall.ps1 import moje-domeny.txt firma    # list | show <p> | import <plik> [p] | edit <p> | remove <p>
 ```
 
 ### Serwery projektu (bez roota)

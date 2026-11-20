@@ -1,0 +1,3 @@
+# Profil firewalla „ansible" (publiczny, w obrazie). Domena = domena + wszystkie subdomeny; IP/CIDR wprost.
+# Ansible Galaxy (kolekcje). Własne cele playbooków — w prywatnym profilu.
+galaxy.ansible.com
