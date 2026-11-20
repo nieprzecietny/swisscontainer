@@ -1,0 +1,13 @@
+# Domyślna konfiguracja dynamiczna (gdy projekt nie ma własnego katalogu TRAEFIK_DYNAMIC_DIR):
+# wszystko z :8088 → aplikacja na @BACKEND@ (np. `dotnet watch` / Aspire).
+http:
+  routers:
+    app:
+      rule: "PathPrefix(`/`)"
+      entryPoints: [web]
+      service: app
+  services:
+    app:
+      loadBalancer:
+        servers:
+          - url: "@BACKEND@"

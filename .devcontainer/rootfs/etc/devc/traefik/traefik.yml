@@ -1,0 +1,18 @@
+# Traefik projektu (dev-services, jako vscode) — file provider; @…@ podstawia dev-services.
+entryPoints:
+  web:
+    address: "127.0.0.1:@PORT@"
+providers:
+  file:
+    directory: "@DYN@"
+    watch: true
+log:
+  filePath: "@RUN@/traefik.log"
+  level: INFO
+accessLog:
+  filePath: "@RUN@/traefik-access.log"
+api:
+  dashboard: false
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false

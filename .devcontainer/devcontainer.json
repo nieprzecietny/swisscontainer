@@ -49,8 +49,13 @@
   "postStartCommand": "sudo /usr/local/sbin/container-init.sh",
   "waitFor": "postStartCommand",
 
-  "forwardPorts": [1433, 3306, 8080],
+  // Serwery projektu (dev-services, jako vscode): 8000 Apache+PHP-FPM · 8081 nginx · 8088 Traefik · 5173 Vite
+  "forwardPorts": [1433, 3306, 8080, 8000, 8081, 8088, 5173],
   "portsAttributes": {
+    "8000": { "label": "Apache + PHP-FPM", "onAutoForward": "notify" },
+    "8081": { "label": "nginx (dist/)", "onAutoForward": "notify" },
+    "8088": { "label": "Traefik", "onAutoForward": "notify" },
+    "5173": { "label": "Vite", "onAutoForward": "notify" },
     "1433": { "label": "SQL Server", "onAutoForward": "silent" },
     "3306": { "label": "MariaDB", "onAutoForward": "silent" },
     "8080": { "label": "phpMyAdmin", "onAutoForward": "notify" },

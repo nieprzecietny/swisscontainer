@@ -7,7 +7,8 @@ w izolowanym środowisku. Jeden kontener, wszystko w środku:
 - usługi: **SQL Server 2025**, **MariaDB**, phpMyAdmin, RabbitMQ, Mailpit
 - serwowanie per stos z hot reload: `dotnet watch` / Aspire / Traefik, Symfony CLI / Apache + PHP-FPM, Vite / nginx
 
-> **Status: w budowie.** Gotowe etapy 1–3 z 6 (szkielet, toolchainy, usługi w kontenerze) + testy `verify.sh` dla nich.
+> **Status: w budowie.** Gotowe etapy 1–4 z 6 (szkielet, toolchainy, usługi w kontenerze, serwowanie per stos) + testy `verify.sh`.
+> Brakuje firewalla (etap 5).
 > Plan i decyzje: [`docs/plan-devcontainer.md`](docs/plan-devcontainer.md).
 
 ## Bezpieczeństwo w skrócie
@@ -49,6 +50,18 @@ sudo devc-svc restart mariadb       # restart jednej usługi
 sudo devc-svc logs mssql 100        # ostatnie linie logu
 devc-verify                         # testy akceptacyjne obrazu (VERIFY_INTRUSIVE=1 — także restarty)
 ```
+
+### Serwery projektu (bez roota)
+
+```bash
+dev-services start            # Apache+PHP-FPM :8000 (public/), nginx :8081 (dist/), Traefik :8088
+dev-services start apache     # tylko jeden (apache | php-fpm | nginx | traefik)
+dev-services status | stop | reload | logs apache
+APP_PUBLIC_DIR=web dev-services start apache    # inny DocumentRoot; APP_DIST_DIR — katalog buildu dla nginx
+```
+
+Apache działa jak hosting współdzielony (`.htaccess`, mod_rewrite, PHP-FPM); zmiany w PHP widać od razu.
+Traefik bierze konfigurację dynamiczną z `traefik/` w projekcie (albo kieruje `/` na `TRAEFIK_BACKEND`, domyślnie :5000).
 
 Xdebug jest zainstalowany, ale wyłączony: `export PHP_INI_SCAN_DIR=:/etc/devc/php/xdebug.d` (wyłączenie: `unset PHP_INI_SCAN_DIR`).
 

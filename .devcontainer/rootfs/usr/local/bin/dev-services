@@ -1,0 +1,135 @@
+#!/bin/bash
+# dev-services — serwery WWW projektu, uruchamiane jako vscode (bez roota; D27, plan 4.6).
+#
+#   dev-services start  [apache|php-fpm|nginx|traefik]   (bez nazwy: wszystkie)
+#   dev-services stop   [nazwa]
+#   dev-services reload [nazwa]
+#   dev-services status
+#   dev-services logs   <nazwa> [liczba-linii]
+#
+# Porty (tylko 127.0.0.1; forwarding VS Code): Apache 8000 (+ PHP-FPM), nginx 8081, Traefik 8088.
+# Zmienne:
+#   APP_PUBLIC_DIR     DocumentRoot Apache   (domyślnie <workspace>/public)
+#   APP_DIST_DIR       root nginx (build JS) (domyślnie <workspace>/dist)
+#   TRAEFIK_DYNAMIC_DIR  konfiguracja dynamiczna Traefika (domyślnie <workspace>/traefik, jeśli istnieje;
+#                        inaczej trasa / → TRAEFIK_BACKEND, domyślnie http://127.0.0.1:5000)
+#   DEVC_APACHE_PORT / DEVC_NGINX_PORT / DEVC_TRAEFIK_PORT, DEVC_RUN (PID-y i logi, domyślnie /tmp/devc)
+# Xdebug dla PHP-FPM: export PHP_INI_SCAN_DIR=:/etc/devc/php/xdebug.d przed `dev-services start php-fpm`.
+set -euo pipefail
+
+if [ "$(id -u)" -eq 0 ]; then echo "dev-services: nie uruchamiaj jako root (serwery projektu działają jako vscode)" >&2; exit 1; fi
+
+DEVC_RUN="${DEVC_RUN:-/tmp/devc}"
+WORKSPACE="${DEVC_WORKSPACE:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+APP_PUBLIC_DIR="${APP_PUBLIC_DIR:-${WORKSPACE}/public}"
+APP_DIST_DIR="${APP_DIST_DIR:-${WORKSPACE}/dist}"
+DEVC_APACHE_PORT="${DEVC_APACHE_PORT:-8000}"
+DEVC_NGINX_PORT="${DEVC_NGINX_PORT:-8081}"
+DEVC_TRAEFIK_PORT="${DEVC_TRAEFIK_PORT:-8088}"
+TRAEFIK_BACKEND="${TRAEFIK_BACKEND:-http://127.0.0.1:5000}"
+if [ -z "${TRAEFIK_DYNAMIC_DIR:-}" ] && [ -d "${WORKSPACE}/traefik" ]; then TRAEFIK_DYNAMIC_DIR="${WORKSPACE}/traefik"; fi
+export DEVC_RUN DEVC_APACHE_PORT DEVC_APP_PUBLIC_DIR="${APP_PUBLIC_DIR}"
+
+ALL=(php-fpm apache nginx traefik)
+umask 077
+mkdir -p "${DEVC_RUN}" "${DEVC_RUN}/nginx" "${DEVC_RUN}/traefik/dynamic"
+chmod 0700 "${DEVC_RUN}"
+
+say()  { printf '[dev-services] %s\n' "$*"; }
+die()  { printf '[dev-services] BŁĄD: %s\n' "$*" >&2; exit 1; }
+valid() { local s; for s in "${ALL[@]}"; do [ "$s" = "$1" ] && return 0; done; return 1; }
+
+pidfile() { case "$1" in php-fpm) echo "${DEVC_RUN}/php-fpm.pid";; apache) echo "${DEVC_RUN}/apache.pid";;
+                         nginx) echo "${DEVC_RUN}/nginx.pid";; traefik) echo "${DEVC_RUN}/traefik.pid";; esac; }
+logfile() { case "$1" in php-fpm) echo "${DEVC_RUN}/php-fpm.log";; apache) echo "${DEVC_RUN}/apache-error.log";;
+                         nginx) echo "${DEVC_RUN}/nginx-error.log";; traefik) echo "${DEVC_RUN}/traefik.log";; esac; }
+port() { case "$1" in apache) echo "${DEVC_APACHE_PORT}";; nginx) echo "${DEVC_NGINX_PORT}";; traefik) echo "${DEVC_TRAEFIK_PORT}";; *) echo "";; esac; }
+pid_of() { local f; f="$(pidfile "$1")"; [ -s "$f" ] && cat "$f" || true; }
+running() { local p; p="$(pid_of "$1")"; [ -n "$p" ] && kill -0 "$p" 2>/dev/null; }
+
+wait_port() { local p="$1" i; for ((i = 0; i < 50; i++)); do (exec 3<>"/dev/tcp/127.0.0.1/${p}") 2>/dev/null && return 0; sleep 0.2; done; return 1; }
+wait_file() { local f="$1" i; for ((i = 0; i < 50; i++)); do [ -e "$f" ] && return 0; sleep 0.2; done; return 1; }
+
+render() {   # szablon → plik w DEVC_RUN (podstawienie @…@)
+    sed -e "s|@RUN@|${DEVC_RUN}|g" -e "s|@PORT@|$3|g" -e "s|@DIST@|${APP_DIST_DIR}|g" \
+        -e "s|@DYN@|${TRAEFIK_DYNAMIC_DIR:-${DEVC_RUN}/traefik/dynamic}|g" -e "s|@BACKEND@|${TRAEFIK_BACKEND}|g" "$1" > "$2"
+}
+
+start_php-fpm() {
+    php-fpm8.5 --fpm-config /etc/devc/php/php-fpm.conf -t >/dev/null 2>&1 || php-fpm8.5 --fpm-config /etc/devc/php/php-fpm.conf -t
+    php-fpm8.5 --fpm-config /etc/devc/php/php-fpm.conf
+    wait_file "${DEVC_RUN}/php-fpm.sock" || die "PHP-FPM nie utworzył gniazda (dev-services logs php-fpm)"
+}
+start_apache() {
+    [ -d "${APP_PUBLIC_DIR}" ] || { say "apache: brak katalogu ${APP_PUBLIC_DIR} (APP_PUBLIC_DIR) — pomijam"; return 0; }
+    running php-fpm || start_php-fpm
+    apache2 -f /etc/devc/apache/httpd.conf -k start
+    wait_port "${DEVC_APACHE_PORT}" || die "Apache nie słucha na ${DEVC_APACHE_PORT} (dev-services logs apache)"
+}
+start_nginx() {
+    [ -d "${APP_DIST_DIR}" ] || { say "nginx: brak katalogu ${APP_DIST_DIR} (APP_DIST_DIR) — pomijam"; return 0; }
+    render /etc/devc/nginx/nginx.conf "${DEVC_RUN}/nginx.conf" "${DEVC_NGINX_PORT}"
+    nginx -e "${DEVC_RUN}/nginx-error.log" -p "${DEVC_RUN}/nginx" -c "${DEVC_RUN}/nginx.conf"
+    wait_port "${DEVC_NGINX_PORT}" || die "nginx nie słucha na ${DEVC_NGINX_PORT} (dev-services logs nginx)"
+}
+start_traefik() {
+    if [ -z "${TRAEFIK_DYNAMIC_DIR:-}" ]; then render /etc/devc/traefik/default-dynamic.yml "${DEVC_RUN}/traefik/dynamic/app.yml" ""; fi
+    render /etc/devc/traefik/traefik.yml "${DEVC_RUN}/traefik.yml" "${DEVC_TRAEFIK_PORT}"
+    nohup traefik --configFile="${DEVC_RUN}/traefik.yml" > "${DEVC_RUN}/traefik.out" 2>&1 &
+    echo $! > "${DEVC_RUN}/traefik.pid"
+    wait_port "${DEVC_TRAEFIK_PORT}" || die "Traefik nie słucha na ${DEVC_TRAEFIK_PORT} (dev-services logs traefik)"
+}
+
+stop_one() {
+    local s="$1" p
+    running "$s" || { rm -f "$(pidfile "$s")"; return 0; }
+    case "$s" in
+        apache) apache2 -f /etc/devc/apache/httpd.conf -k stop 2>/dev/null || kill "$(pid_of apache)" ;;
+        nginx)  nginx -e "${DEVC_RUN}/nginx-error.log" -p "${DEVC_RUN}/nginx" -c "${DEVC_RUN}/nginx.conf" -s quit 2>/dev/null || kill "$(pid_of nginx)" ;;
+        *)      kill "$(pid_of "$s")" ;;
+    esac
+    p="$(pid_of "$s")"
+    for _ in $(seq 1 50); do [ -n "$p" ] && kill -0 "$p" 2>/dev/null || break; sleep 0.2; done
+    rm -f "$(pidfile "$s")"
+    [ "$s" = php-fpm ] && rm -f "${DEVC_RUN}/php-fpm.sock"
+    return 0
+}
+reload_one() {
+    local s="$1"
+    running "$s" || { say "$s: nie działa"; return 0; }
+    case "$s" in
+        php-fpm) kill -USR2 "$(pid_of php-fpm)" ;;
+        apache)  apache2 -f /etc/devc/apache/httpd.conf -k graceful ;;
+        nginx)   render /etc/devc/nginx/nginx.conf "${DEVC_RUN}/nginx.conf" "${DEVC_NGINX_PORT}"
+                 nginx -e "${DEVC_RUN}/nginx-error.log" -p "${DEVC_RUN}/nginx" -c "${DEVC_RUN}/nginx.conf" -s reload ;;
+        traefik) say "traefik: konfiguracja dynamiczna przeładowuje się sama (watch); statyczna — stop + start" ;;
+    esac
+}
+
+targets() { if [ -n "${1:-}" ]; then valid "$1" || die "nieznany serwer: $1 (${ALL[*]})"; echo "$1"; else printf '%s\n' "${ALL[@]}"; fi; }
+
+cmd="${1:-status}"; name="${2:-}"
+case "${cmd}" in
+    start)
+        for s in $(targets "${name}"); do
+            if running "$s"; then say "$s: już działa"; continue; fi
+            "start_$s"; running "$s" && say "$s: działa$( [ -n "$(port "$s")" ] && echo " — http://localhost:$(port "$s")/")"
+        done ;;
+    stop)
+        if [ -z "${name}" ]; then for s in traefik nginx apache php-fpm; do stop_one "$s"; done; else valid "${name}" || die "nieznany serwer: ${name}"; stop_one "${name}"; fi
+        say "zatrzymano" ;;
+    reload)
+        for s in $(targets "${name}"); do reload_one "$s"; done ;;
+    restart)
+        for s in $(targets "${name}"); do stop_one "$s"; done
+        for s in $(targets "${name}"); do "start_$s"; done ;;
+    status)
+        for s in "${ALL[@]}"; do
+            if running "$s"; then printf '%-8s działa  pid %-7s %s\n' "$s" "$(pid_of "$s")" "$( [ -n "$(port "$s")" ] && echo "http://localhost:$(port "$s")/")"
+            else printf '%-8s stop\n' "$s"; fi
+        done ;;
+    logs)
+        [ -n "${name}" ] && valid "${name}" || die "użycie: dev-services logs <${ALL[*]// /|}> [linie]"
+        f="$(logfile "${name}")"; [ -f "$f" ] && tail -n "${3:-100}" "$f" || say "brak logu $f" ;;
+    *) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac

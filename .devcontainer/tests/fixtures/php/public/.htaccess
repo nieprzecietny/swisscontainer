@@ -1,0 +1,5 @@
+# Jak na hostingu współdzielonym: front controller przez mod_rewrite
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.php?route=$1 [QSA,L]

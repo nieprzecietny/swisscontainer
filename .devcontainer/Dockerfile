@@ -328,6 +328,37 @@ RUN set -eux; \
     install -d -o mailpit -g mailpit -m 0750 /var/lib/mailpit; \
     mailpit version --no-release-check || mailpit version || true
 
+# =================================================================================================
+# Etap 4 — serwowanie per stos (serwery projektu uruchamia `dev-services` jako vscode, nie root)
+# =================================================================================================
+ARG KEY_NGINX=8540A6F18833A80E9C1653A42FD21310B49F6B46
+ARG NGINX_VERSION=1.30.7-1~noble
+ARG TRAEFIK_VERSION=3.7.19
+ARG TRAEFIK_SHA256=97534a68335a087137d0f2adecefe37c8216ac10114dc7e5b510f2a8a12f89be
+ARG BROWSER_SYNC_VERSION=3.0.4
+COPY build/make-cli-wrappers.js /tmp/make-cli-wrappers.js
+RUN set -eux; \
+    /usr/local/lib/devc/add-apt-repo.sh nginx https://nginx.org/keys/nginx_signing.key "${KEY_NGINX}" \
+        "https://nginx.org/packages/ubuntu noble nginx"; \
+    printf 'Package: nginx*\nPin: origin nginx.org\nPin-Priority: 1001\n' > /etc/apt/preferences.d/nginx; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends apache2 "nginx=${NGINX_VERSION}"; \
+    rm -rf /var/lib/apt/lists/*; \
+    # pakietowe usługi systemowe nie są używane (brak systemd; serwery startuje dev-services jako vscode)
+    rm -f /etc/apache2/sites-enabled/* /etc/nginx/conf.d/default.conf; \
+    apache2 -v | head -1; nginx -v; \
+    cd /tmp; \
+    curl -fsSLo traefik.tgz "https://github.com/traefik/traefik/releases/download/v${TRAEFIK_VERSION}/traefik_v${TRAEFIK_VERSION}_linux_amd64.tar.gz"; \
+    echo "${TRAEFIK_SHA256}  traefik.tgz" | sha256sum -c -; \
+    d="$(mktemp -d)"; tar -xzf traefik.tgz -C "${d}"; install -m 0755 "${d}/traefik" /usr/local/bin/traefik; \
+    rm -rf "${d}" traefik.tgz; traefik version | head -2; \
+    # browser-sync na Node narzędziowym (wrapper w /usr/local/bin, jak agenci AI)
+    export PATH="/opt/devc-node/bin:${PATH}"; \
+    npm install -g --prefix /opt/devc-tools --no-fund --no-audit --loglevel=warn "browser-sync@${BROWSER_SYNC_VERSION}"; \
+    node /tmp/make-cli-wrappers.js browser-sync; \
+    rm -f /tmp/make-cli-wrappers.js; npm cache clean --force; rm -rf /root/.npm; \
+    browser-sync --version
+
 # --- Katalogi pod wolumeny (logowania i historia przetrwają rebuild) ----------------------------
 # Pusty nazwany wolumen przejmuje przy pierwszym montowaniu właściciela katalogu z obrazu.
 RUN set -eux; \
@@ -392,6 +423,7 @@ RUN set -eux; \
 USER root
 COPY rootfs/ /tmp/devc-rootfs/
 COPY scripts/verify.sh /tmp/devc-rootfs/usr/local/bin/devc-verify
+COPY tests/fixtures/ /tmp/devc-rootfs/usr/local/share/devc/fixtures/
 RUN set -eux; \
     cd /tmp/devc-rootfs; \
     if grep -rlI $'\r' .; then echo "BŁĄD: końce linii CRLF w rootfs/ (wymagane LF)" >&2; exit 1; fi; \

@@ -199,7 +199,64 @@ sec_services() {
 }
 
 # ==================================================================================================
-sec_web()      { section "Etap 4 — serwowanie per stos"; skip "etap 4" "jeszcze nie zaimplementowany"; }
+sec_web() {
+    section "Etap 4 — serwowanie per stos"
+    local fx="" d
+    for d in "$(dirname "$(readlink -f "$0")")/../tests/fixtures" /usr/local/share/devc/fixtures; do
+        [ -d "$d/php" ] && { fx="$d"; break; }
+    done
+    if [ -z "$fx" ]; then skip "etap 4" "brak fixture'ów (tests/fixtures)"; return; fi
+    check_re "Apache" 'Apache/2\.4' 'apache2 -v'
+    check_re "nginx (nginx.org)" 'nginx/1\.' 'nginx -v'
+    check_re "Traefik v3" 'Version: +3\.' 'traefik version'
+    check_re "browser-sync" '^[0-9]+\.' 'browser-sync --version'
+
+    # kopia fixture'ów (test hot reload zmienia pliki) + osobne porty i katalog, żeby nie ruszać serwerów użytkownika
+    local w="${TMP}/web"; mkdir -p "$w"; cp -a "$fx/php" "$fx/static" "$w/"
+    export DEVC_RUN="${TMP}/run" APP_PUBLIC_DIR="$w/php/public" APP_DIST_DIR="$w/static/dist" \
+        DEVC_APACHE_PORT=18000 DEVC_NGINX_PORT=18081 DEVC_TRAEFIK_PORT=18088 TRAEFIK_BACKEND=http://127.0.0.1:18081
+    check "dev-services start (wszystkie)" 'dev-services start'
+    check_re "dev-services status" 'apache +działa.*nginx +działa.*traefik +działa' 'dev-services status | tr "\n" " "'
+    check_re "Apache + PHP-FPM: index.php" 'devc-fixture-php v1' 'curl -fsS http://127.0.0.1:18000/index.php'
+    check_re "Apache: .htaccess + mod_rewrite (front controller)" 'route=hello/world' 'curl -fsS http://127.0.0.1:18000/hello/world'
+    check_re "PHP-FPM jako vscode (nie root)" '^user=vscode' 'curl -fsS http://127.0.0.1:18000/ | grep ^user='
+    sed -i 's/devc-fixture-php v1/devc-fixture-php v2/' "$w/php/public/index.php"
+    check_re "PHP: zmiana pliku widoczna bez restartu" 'devc-fixture-php v2' 'sleep 1; curl -fsS http://127.0.0.1:18000/index.php'
+    check_re "nginx: dist/index.html" 'devc-fixture-spa' 'curl -fsS http://127.0.0.1:18081/'
+    check_re "nginx: SPA fallback (/deep/link → index.html)" 'devc-fixture-spa' 'curl -fsS http://127.0.0.1:18081/deep/link'
+    check_re "nginx: asset" 'devc-fixture-spa asset' 'curl -fsS http://127.0.0.1:18081/assets/app.js'
+    check_no "nginx: brak assetu → 404 (bez fallbacku)" 'curl -fsS http://127.0.0.1:18081/assets/missing.js'
+    check_re "Traefik (file provider) → backend" 'devc-fixture-spa' 'curl -fsS http://127.0.0.1:18088/some/route'
+    local p
+    for p in '[a]pache2 -f /etc/devc/apache' '[p]hp-fpm: master' '[n]ginx: master' '[t]raefik --configFile'; do
+        check_no "nie jako root: ${p//[\[\]]/}" "ps -eo user=,args= | grep -E '${p}' | grep -v '^vscode '"
+    done
+    check "dev-services stop" 'dev-services stop'
+    check_no "po stop: porty zamknięte" '(exec 3<>/dev/tcp/127.0.0.1/18000) 2>/dev/null || (exec 3<>/dev/tcp/127.0.0.1/18081) 2>/dev/null'
+    unset DEVC_RUN APP_PUBLIC_DIR APP_DIST_DIR DEVC_APACHE_PORT DEVC_NGINX_PORT DEVC_TRAEFIK_PORT TRAEFIK_BACKEND
+
+    # .NET: dotnet watch — zmiana kodu widoczna bez ręcznego restartu
+    if [ "${VERIFY_SLOW:-1}" = 1 ]; then
+        local dn="${TMP}/dnweb"
+        if T=300 run "dotnet new web -n app -f net10.0 -o '$dn' && cd '$dn' && dotnet build -v q"; then
+            (cd "$dn" && DOTNET_WATCH_SUPPRESS_EMOJIS=1 nohup dotnet watch run --non-interactive --urls http://127.0.0.1:15055 > "${TMP}/watch.log" 2>&1 &)
+            if T=180 run 'for i in $(seq 1 170); do curl -fsS http://127.0.0.1:15055/ 2>/dev/null | grep -q "Hello World" && exit 0; sleep 1; done; exit 1'; then
+                pass "dotnet watch: aplikacja odpowiada"
+                sed -i 's/Hello World!/Hello devc!/' "$dn/Program.cs"
+                T=180 check_re "dotnet watch: zmiana kodu widoczna bez restartu ręcznego" 'Hello devc!' \
+                    'for i in $(seq 1 170); do r=$(curl -fsS http://127.0.0.1:15055/ 2>/dev/null); case "$r" in *"Hello devc"*) echo "$r"; exit 0;; esac; sleep 1; done; exit 1'
+            else
+                fail "dotnet watch: aplikacja odpowiada" "$(tail -n 5 "${TMP}/watch.log" | tr '\n' ' ')"
+            fi
+            pkill -f "dotnet watch run --non-interactive --urls http://127.0.0.1:15055" 2>/dev/null || true
+            pkill -f "${dn}/bin/" 2>/dev/null || true
+        else
+            fail "dotnet new web" "$(tail -n 3 "${TMP}/out" | tr '\n' ' ')"
+        fi
+    else
+        skip "dotnet watch" "VERIFY_SLOW=0"
+    fi
+}
 sec_firewall() { section "Etap 5 — firewall"; skip "etap 5" "jeszcze nie zaimplementowany"; }
 
 # ==================================================================================================

@@ -109,10 +109,11 @@ Połączenia: `Server=localhost,1433;...;TrustServerCertificate=True`, `mysql://
     usr/local/sbin/container-init.sh   # sudo, bez argumentów: firewall → init usług → supervisord  [zrobione]
     usr/local/sbin/devc-svc            # sudo: status / restart <usługa> / logs <usługa>   [zrobione]
     usr/local/lib/devc/services.sh     # wspólna logika usług (init, konta dev, gotowość)   [zrobione]
-    usr/local/bin/dev-services         # bez sudo: serwery WWW projektu
+    usr/local/bin/dev-services         # bez sudo: serwery WWW projektu                    [zrobione]
     etc/devc/firewall/profiles/*.txt   # publiczne profile firewalla
     etc/devc/supervisor/, etc/devc/{apache,nginx,php,pma}/
-  scripts/verify.sh          # testy akceptacyjne (w obrazie jako devc-verify)             [etapy 1–3]
+  scripts/verify.sh          # testy akceptacyjne (w obrazie jako devc-verify)             [etapy 1–4]
+  tests/fixtures/            # PHP + .htaccess, statyczny dist/ (SPA) — dla verify.sh       [zrobione]
 host/                        # uruchamiane NA HOŚCIE (Windows)
   ansible-vault/Dockerfile   # izolowany vault                                              [zrobione]
   vault.ps1                  # wrapper → kopia do %USERPROFILE%\bin                          [zrobione]
@@ -248,9 +249,11 @@ inotify działa przy kodzie w wolumenie Dockera (D6); na bind mouncie z Windows 
 3. **Usługi w środku** — ✅ zrobione: supervisord, `container-init.sh`, `devc-svc`; SQL Server 2025, MariaDB 12.3,
    phpMyAdmin, RabbitMQ 4.3, Mailpit; `DEV_SERVICES`; konta `dev`. Usługi słuchają tylko na 127.0.0.1.
    Uprawnienia MariaDB odtwarzane przy każdym starcie serwera (`--init-file`) — `dev` nie podniesie sobie uprawnień.
-4. **Serwowanie per stos** — Apache + PHP-FPM, nginx, Traefik, Vite, `dotnet watch`, Aspire; `dev-services`.
+4. **Serwowanie per stos** — ✅ zrobione: `dev-services start|stop|reload|restart|status|logs` (jako `vscode`):
+   Apache 8000 (`.htaccess`, mod_rewrite, PHP-FPM przez gniazdo, hot reload PHP), nginx 8081 (`dist/`, SPA fallback),
+   Traefik 8088 (file provider), browser-sync; `dotnet watch` przetestowany. Fixture'y: `.devcontainer/tests/fixtures/`.
 5. **Firewall** — profile (obraz + wolumen), dnsmasq + ipset + iptables, tryby `log` → `enforce`, `host/devc-firewall.ps1`.
-6. **`verify.sh`** — 🟡 sekcje etapów 1–3 gotowe; m.in.: wersje SDK/runtime'ów; `sudo -n true` → odmowa; brak `docker.sock`; brak hasła vaulta;
+6. **`verify.sh`** — 🟡 sekcje etapów 1–4 gotowe; m.in.: wersje SDK/runtime'ów; `sudo -n true` → odmowa; brak `docker.sock`; brak hasła vaulta;
    `sqlcmd`/`mariadb` jako `dev`; usługi pod własnymi użytkownikami (`kill` z `vscode` → odmowa); serwery WWW nie jako
    root; hot reload per stos; `example.com` zablokowane, profile przepuszczają swoje cele; bez profili — tylko `vscode`.
 
