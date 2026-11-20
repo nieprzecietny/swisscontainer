@@ -413,7 +413,14 @@ RUN set -eux; \
     for v in ${NODE_VERSIONS}; do fnm install "${v}"; done; \
     fnm default "${NODE_DEFAULT}"; \
     fnm list; \
-    node --version
+    node --version; \
+    # Nagłówki Node dla node-gyp (moduły natywne przy `npm install`) — pobierane TERAZ, przy budowaniu obrazu.
+    # W działającym kontenerze nodejs.org jest zablokowane przez firewall; cache: ~/.cache/node-gyp/<wersja>.
+    for v in ${NODE_VERSIONS}; do \
+        inst="$(fnm exec --using="${v}" node -p 'require("path").resolve(process.execPath, "../..")')"; \
+        fnm exec --using="${v}" node "${inst}/lib/node_modules/npm/node_modules/node-gyp/bin/node-gyp.js" install; \
+    done; \
+    ls ~/.cache/node-gyp
 
 # Narzędzia użytkownika: Aspire CLI (dotnet tool, ~/.dotnet/tools) + szablony Aspire; ansible-core (pipx, Python 3.13 —
 # ansible-core 2.22 wymaga Pythona ≥ 3.13, systemowy Python Ubuntu 24.04 to 3.12).

@@ -1,8 +1,3 @@
 # Profil firewalla „dotnet" (publiczny, w obrazie). Domena = domena + wszystkie subdomeny; IP/CIDR wprost.
-# NuGet i pobieranie SDK/workloadów .NET.
+# NuGet. SDK .NET są w obrazie — adresy pobierania SDK celowo poza profilem.
 nuget.org
-builds.dotnet.microsoft.com
-dotnetcli.azureedge.net
-dotnetcli.blob.core.windows.net
-dot.net
-aka.ms

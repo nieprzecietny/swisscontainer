@@ -51,6 +51,23 @@ sec_base() {
     check_re "Gemini CLI" '[0-9]+\.[0-9]+' 'gemini --version'
     check_re "fnm: Node 22, 24, 26" 'v22\..*v24\..*v26\.' 'fnm list | tr "\n" " "'
     check_re "Node domyślny = 24" '^v24\.' 'node --version'
+    # node-gyp: nagłówki Node z obrazu (cache), nie z nodejs.org — działa także przy włączonym firewallu
+    local v
+    for v in $(fnm list | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | sort -u); do
+        check "node-gyp: nagłówki Node ${v} w obrazie" "test -f ~/.cache/node-gyp/${v#v}/include/node/node_api.h"
+    done
+    local fxa=""
+    for d in "$(dirname "$(readlink -f "$0")")/../tests/fixtures/node-addon" /usr/local/share/devc/fixtures/node-addon; do
+        [ -f "$d/binding.gyp" ] && { fxa="$d"; break; }
+    done
+    if [ -n "$fxa" ]; then
+        T=180 check_re "node-gyp: kompilacja modułu natywnego offline (bez nodejs.org)" '^devc-addon$' \
+            "d=\$(mktemp -d /tmp/devc-addon.XXXX) && cp -a '$fxa'/. \"\$d\" && cd \"\$d\" \
+             && node \"\$(dirname \"\$(dirname \"\$(readlink -f \"\$(command -v node)\")\")\")/lib/node_modules/npm/node_modules/node-gyp/bin/node-gyp.js\" rebuild >/dev/null \
+             && node -e 'console.log(require(\"./build/Release/addon.node\").hello())'"
+    else
+        skip "node-gyp: kompilacja modułu natywnego" "brak fixture'a node-addon"
+    fi
     check_re "agenci na Node narzędziowym (/opt/devc-node)" '/opt/devc-node' 'cat "$(command -v codex)"'
     check_no "agent nie zmieni swoich binarek (/opt/devc-tools tylko root)" 'touch /opt/devc-tools/.x'
 }
@@ -277,11 +294,15 @@ sec_firewall() {
     check_no "DNS-over-TCP do 1.1.1.1 zablokowane" 'dig +tcp +time=3 +tries=1 @1.1.1.1 example.com | grep -q "ANSWER SECTION"'
     check_no "IPv6 zablokowane" 'curl -6 -sS -o /dev/null --max-time 5 https://example.com/'
     check_no "HTTPS po IP spoza listy (1.1.1.1) zablokowane" 'curl -sS -o /dev/null --max-time 5 -k https://1.1.1.1/'
-    local p host
+    # profile prywatne (wolumen devc-firewall) są nieczytelne dla vscode — mogą zawierać dowolne z hostów poniżej
+    local p host private=""
+    for p in ${profiles//,/ }; do [ -f "/etc/devc/firewall/profiles/${p}.txt" ] || private+="${p} "; done
     for p in ai-anthropic:api.anthropic.com ai-openai:api.openai.com ai-google:generativelanguage.googleapis.com \
              node:registry.npmjs.org dotnet:api.nuget.org php:repo.packagist.org python:pypi.org github:api.github.com test:example.net; do
         host="${p#*:}"; p="${p%%:*}"
         if on "$p"; then check "profil ${p}: ${host} dostępny" "$R https://${host}/"
+        elif [ -n "${private}" ] && run "$R https://${host}/"; then
+            skip "bez profilu ${p}: ${host} dostępny" "przepuszcza go profil prywatny (${private% })"
         else check_no "bez profilu ${p}: ${host} zablokowane" "$R https://${host}/"; fi
     done
 }

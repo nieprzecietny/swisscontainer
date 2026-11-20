@@ -70,7 +70,7 @@ konta) **nie trafia do repo ani do obrazu** — patrz 4.3 i 4.4.
 | Claude Code | przypięta (ARG) | npm → `/opt/devc-tools` (root) | natywna binarka; `DISABLE_AUTOUPDATER=1` — aktualizacja = rebuild |
 | Codex | przypięta (ARG) | npm → `/opt/devc-tools` | wrapper na Node narzędziowym; login `codex login --device-auth` lub `OPENAI_API_KEY` |
 | Gemini CLI | przypięta (ARG) | npm → `/opt/devc-tools` | wrapper na Node narzędziowym; login kontem Google lub `GEMINI_API_KEY` |
-| Node projektów | 22.x, 24.x (domyślny), 26.x | fnm (SHA-256 przypięte), `FNM_DIR=~/.local/share/fnm` | `fnm use 22`, `fnm default 26`, `fnm install 20`; auto z `.nvmrc` / `.node-version` przy `cd` |
+| Node projektów | 22.x, 24.x (domyślny), 26.x | fnm (SHA-256 przypięte), `FNM_DIR=~/.local/share/fnm` | `fnm use 22`, `fnm default 26`; auto z `.nvmrc` / `.node-version` przy `cd`. Nowa wersja = `ARG NODE_VERSIONS` + rebuild (nodejs.org zablokowane w czasie pracy; nagłówki node-gyp w obrazie) |
 | Node narzędziowy | 24.x | archiwum nodejs.org + SHA-256 → `/opt/devc-node` | poza PATH; tylko dla wrapperów agentów |
 | .NET SDK | 8.0, 10.0, 11.0 + Aspire CLI | `dotnet-install.sh` / feature `dotnet:2` | runtime'y 8/10/11 z SDK; .NET 8 bez wsparcia od 10.11.2026 |
 | PHP | 8.5 (CLI + FPM) | PPA `ondrej/php` | mbstring, xml, curl, intl, zip, opcache, apcu, `pdo_mysql`, `sqlsrv`/`pdo_sqlsrv` 5.13.x; Xdebug wyłączony domyślnie |

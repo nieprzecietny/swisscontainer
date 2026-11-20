@@ -51,7 +51,7 @@
     // Firewall: profile po przecinku. Publiczne: vscode, ai-anthropic, ai-openai, ai-google, node, dotnet, php,
     // python, ansible, github; prywatne — z wolumenu devc-firewall. Brak/puste = tylko "vscode" (minimum).
     // Przykład: "vscode,ai-anthropic,node,php,github,firma". Zmiana działa po przebudowie kontenera.
-    "DEVC_FIREWALL_PROFILES": "vscode",
+    "DEVC_FIREWALL_PROFILES": "vscode,ai-anthropic,ai-google,github,firma",
     // enforce (domyślnie) | log (nauka: przepuszcza i loguje zapytania DNS — sudo devc-svc logs dnsmasq) | off
     "DEVC_FIREWALL_MODE": "enforce"
   },
