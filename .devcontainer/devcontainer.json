@@ -40,6 +40,10 @@
 
   "containerEnv": {
     "TZ": "Europe/Warsaw",
+    // Edytor dla gita (opis commita, rebase -i) i narzędzi CLI: zakładka VS Code. Oba, bo VISUAL ma pierwszeństwo
+    // (obraz ustawia micro). `code` jest dostępne w terminalach VS Code; poza nimi (docker exec): EDITOR=micro.
+    "EDITOR": "code --wait",
+    "VISUAL": "code --wait",
     // Usługi uruchamiane przy starcie: mssql, mariadb, phpmyadmin, rabbitmq, mailpit (lista po przecinku; "" = żadna)
     "DEV_SERVICES": "mssql,mariadb,phpmyadmin",
     // Hasło konta `dev` we wszystkich usługach — tylko dane deweloperskie, tylko localhost.
